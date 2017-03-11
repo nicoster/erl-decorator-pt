@@ -1,5 +1,7 @@
 -module(decorator_pt_core).
 
+-include("decorator_pt.hrl").
+
 % adapted from: http://niki.code-karma.com/2011/06/python-style-decorators-in-erlang/
 % changes:
 %   - pass config options to the decorator
@@ -17,11 +19,15 @@ parse_transform(Ast,_Options)->
     io:format("=======~n~p",[Ast]),
     io:format("~n=pp======~n~s",[pretty_print(Ast)]),
     {ExtendedAst2, RogueDecorators} = lists:mapfoldl(fun transform_node/2, [], Ast),
-    Ast2 = lists:flatten(lists:filter(fun(Node)-> Node =/= nil end, ExtendedAst2))
+
+    Ast3 = lists:flatten(lists:filter(fun(Node)-> Node =/= nil end, ExtendedAst2))
         ++ emit_errors_for_rogue_decorators(RogueDecorators),
-    io:format("~n<<<<~n~p",[Ast2]),
-    io:format("~n>>>>~n~s~n",[pretty_print(Ast2)]),
-    Ast2.
+
+%%    Ast3 = [parse_form(F) || F <- Ast2],
+
+    io:format("~n<<<<~n~p",[Ast3]),
+    io:format("~n>>>>~n~s~n",[pretty_print(Ast3)]),
+    Ast3.
 
 %%--------------------------------------------------------------------
 %% @doc Helper to pretty_print an AST.
@@ -32,6 +38,33 @@ pretty_print(Ast) -> lists:flatten([erl_pp:form(N) || N<-Ast]).
 
 emit_errors_for_rogue_decorators(DecoratorList)->
     [{error,{Line,erl_parse,["rogue decorator ", io_lib:format("~p",[D]) ]}} || {attribute, Line, decorate, D} <- DecoratorList].
+
+%%parse_form({function, _, FName, FArity, _} = T) ->
+%%    erl_syntax_lib:map(fun(TE) -> parse_macro(FName, FArity, TE) end, T);
+%%parse_form(T) ->
+%%    T.
+
+%% @doc Rewrites the placeholders ?FUNCTION and ?ARITY to the current
+%%      function name and arity.
+%%
+%% @spec parse_macro(any(), any(), erl_syntax:syntaxTree() ) ->
+%%          erl_syntax:syntaxTree()
+%% @end
+parse_macro(FName, FArity, T) ->
+%%    io:format("parse marco, T:~p~n", [T]),
+    erl_syntax:revert(
+        case erl_syntax:type(T) of
+            atom ->
+                case erl_syntax:atom_value(T) of
+                    ?FUNCTION   -> erl_syntax:atom(FName);
+                    ?ARITY      -> erl_syntax:integer(FArity);
+                    _ -> T
+                end;
+            _ ->
+                T
+        end
+    ).
+
 
 % transforms module level nodes
 % see http://www.erlang.org/doc/apps/erts/absform.html
@@ -123,25 +156,26 @@ function_form_decorator_chain(Line,FuncName,Arity, {DecMod, DecFun, DecExtraArgs
             emit_guards(Line, []),
             [
                 % F = DecMod:DecFun( fun NextFun/1, ArgList),
-                emit_decorated_fun(Line, 'F', {DecMod, DecFun, DecExtraArgs},   NextFuncName, 'ArgList')
+                emit_decorated_fun(Line, FuncName, Arity, 'F', {DecMod, DecFun, DecExtraArgs},   NextFuncName, 'ArgList'),
                 % call 'F'
-                % {call, Line,{var,Line,'F'},[]}
+                {call, Line,{var,Line,'F'},[]}
             ]
         }]
     }.
 
-emit_decorated_fun(Line, Name, {DecMod, DecFun, DecExtraArgs}, InnerFunName, ArgName)->
-    % {match,Line,
-    %     {var,Line,Name},
+emit_decorated_fun(Line, OriginalFunction, Arity, Name, {DecMod, DecFun, DecExtraArgs}, InnerFunName, ArgName)->
+    {match,Line,
+        {var,Line,Name},
         {call,Line,
             {remote, Line, {atom,Line,DecMod},{atom,Line,DecFun}},
             [
                 {'fun',Line,{function, InnerFunName, 1}},
                 {var, Line, ArgName},
-                erl_syntax:revert(erl_syntax:abstract(DecExtraArgs))    %convert to AST
+                erl_syntax_lib:map(fun(TE) -> parse_macro(OriginalFunction, Arity, TE) end, erl_syntax:abstract(DecExtraArgs))
+%%                erl_syntax:revert(erl_syntax:abstract(DecExtraArgs))    %convert to AST
             ]
-       }.
-    % }.
+       }
+    }.
 
 emit_local_call(Line, FuncName, ArgList) ->
     {call, Line, {atom, Line, FuncName}, ArgList}.

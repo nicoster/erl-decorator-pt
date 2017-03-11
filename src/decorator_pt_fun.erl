@@ -11,7 +11,9 @@
 -spec parse_transform(erl_parse:abstract_form(), compile:option()) -> erl_parse:abstract_form().
 %% @end
 parse_transform(Forms, _Options) ->
-    [parse_form(F) || F <- Forms].
+    Ast = [parse_form(F) || F <- Forms],
+%%    io:format("=======~n~p",[Ast]),
+    Ast.
 
 %% @doc Parse individual forms. Now only interested in 'function'
 %%      Applies a function to each node in syntax tree, replacing the original
@@ -30,6 +32,7 @@ parse_form(T) ->
 %%          erl_syntax:syntaxTree()
 %% @end
 parse_macro(FName, FArity, T) ->
+%%    io:format("parse marco, T:~p~n", [T]),
     erl_syntax:revert(
         case erl_syntax:type(T) of
             atom ->
