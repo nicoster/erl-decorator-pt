@@ -14,13 +14,13 @@
 %% @end
 %%--------------------------------------------------------------------
 parse_transform(Ast,_Options)->
-    %io:format("~p~n=======~n",[Ast]),
-    %io:format("~s~n=======~n",[pretty_print(Ast)]),
+    io:format("=======~n~p",[Ast]),
+    io:format("~n=pp======~n~s",[pretty_print(Ast)]),
     {ExtendedAst2, RogueDecorators} = lists:mapfoldl(fun transform_node/2, [], Ast),
     Ast2 = lists:flatten(lists:filter(fun(Node)-> Node =/= nil end, ExtendedAst2))
         ++ emit_errors_for_rogue_decorators(RogueDecorators),
-    %io:format("~p~n<<<<~n",[Ast2]),
-    %io:format("~s~n>>>>~n",[pretty_print(Ast2)]),
+    io:format("~n<<<<~n~p",[Ast2]),
+    io:format("~n>>>>~n~s~n",[pretty_print(Ast2)]),
     Ast2.
 
 %%--------------------------------------------------------------------
@@ -123,16 +123,16 @@ function_form_decorator_chain(Line,FuncName,Arity, {DecMod, DecFun, DecExtraArgs
             emit_guards(Line, []),
             [
                 % F = DecMod:DecFun( fun NextFun/1, ArgList),
-                emit_decorated_fun(Line, 'F', {DecMod, DecFun, DecExtraArgs},   NextFuncName, 'ArgList'),
+                emit_decorated_fun(Line, 'F', {DecMod, DecFun, DecExtraArgs},   NextFuncName, 'ArgList')
                 % call 'F'
-                {call, Line,{var,Line,'F'},[]}
+                % {call, Line,{var,Line,'F'},[]}
             ]
         }]
     }.
 
 emit_decorated_fun(Line, Name, {DecMod, DecFun, DecExtraArgs}, InnerFunName, ArgName)->
-    {match,Line,
-        {var,Line,Name},
+    % {match,Line,
+    %     {var,Line,Name},
         {call,Line,
             {remote, Line, {atom,Line,DecMod},{atom,Line,DecFun}},
             [
@@ -140,8 +140,8 @@ emit_decorated_fun(Line, Name, {DecMod, DecFun, DecExtraArgs}, InnerFunName, Arg
                 {var, Line, ArgName},
                 erl_syntax:revert(erl_syntax:abstract(DecExtraArgs))    %convert to AST
             ]
-        }
-    }.
+       }.
+    % }.
 
 emit_local_call(Line, FuncName, ArgList) ->
     {call, Line, {atom, Line, FuncName}, ArgList}.
