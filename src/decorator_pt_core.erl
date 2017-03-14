@@ -1,6 +1,5 @@
 -module(decorator_pt_core).
 
--include("decorator_pt.hrl").
 
 % adapted from: http://niki.code-karma.com/2011/06/python-style-decorators-in-erlang/
 % changes:
@@ -11,7 +10,6 @@
 
 %%--------------------------------------------------------------------
 %% @doc Function gets called as a Parse Tranformation kickstarter
-%%      TODO: add warnings for rogue decorators
 -spec parse_transform(erl_parse:abstract_form(), compile:option()) -> erl_parse:abstract_form().
 %% @end
 %%--------------------------------------------------------------------

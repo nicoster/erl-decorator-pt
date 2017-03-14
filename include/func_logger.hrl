@@ -1,16 +1,16 @@
 -define(DEBUG, true).
 
--compile({parse_transform, dump_asm}).
+%%-compile({parse_transform, dump_asm}).
 
 -ifdef(DEBUG).
 -compile([{parse_transform, decorator_pt_core}]).
+-compile({parse_transform, ct_expand}).
+-compile(nowarn_unused_function).
 -define(funclog(ArgLogSpans), -decorate({funclogger, ['__FUNCTION__', '__ARITY__', ArgLogSpans]})).
 -else.
 -define(funclog(Spans), -compile([])).
 -endif.
 
-%%-compile({parse_transform, dump_asm}).
--compile({parse_transform, ct_expand}).
 %%-compile({parse_transform, dump_asm}).
 
 preprocess_data([Func, Arity, ArgLogSpans] = Args) ->
