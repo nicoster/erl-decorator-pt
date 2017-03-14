@@ -1,4 +1,3 @@
--define(DEBUG, true).
 
 %%-compile({parse_transform, dump_asm}).
 

@@ -11,13 +11,15 @@
 
 %% API
 
--include("export.hrl").
--include("func_logger.hrl").
+%%-define(DEBUG, true).
+
+%%-include("export.hrl").
+%%-include("func_logger.hrl").
 
 -compile({parse_transform, dump_asm}).
 
-?export().
-?funclog(":2, 4:").
+%%?export().
+%%?funclog(":2, 4:").
 %%?funclog("2:5").
 foo(Name, A, B, C, E, N) ->
     case N > 0 of
@@ -26,5 +28,5 @@ foo(Name, A, B, C, E, N) ->
         _ -> ok
     end.
 
-?export().
+%%?export().
 bar() -> ok.
