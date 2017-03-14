@@ -11,12 +11,12 @@
 
 %% API
 
--compile({parse_transform, export}).
+-include("export.hrl").
 -include("func_logger.hrl").
-%%-compile({parse_transform, dump_asm}).
+
 -compile({parse_transform, dump_asm}).
 
--export_func([]).
+?export().
 ?funclog(":2, 4:").
 %%?funclog("2:5").
 foo(Name, A, B, C, E, N) ->
@@ -26,5 +26,5 @@ foo(Name, A, B, C, E, N) ->
         _ -> ok
     end.
 
--export_func([]).
+?export().
 bar() -> ok.
