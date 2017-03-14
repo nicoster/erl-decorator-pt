@@ -12,8 +12,8 @@
 
 %%-compile({parse_transform, dump_asm}).
 
-preprocess_data([Func, Arity, ArgLogSpans] = Args) ->
-    io:format("func:~p arity:~p scope:~p~n", Args),
+preprocess_data([Func, Arity, ArgLogSpans] = _Args) ->
+%%    io:format("func:~p arity:~p scope:~p~n", _Args),
     ArgSpans = [X || X <- ArgLogSpans, X =/= $ ],
     PosList = lists:flatten(
         [case binary:split(Span, <<":">>) of
