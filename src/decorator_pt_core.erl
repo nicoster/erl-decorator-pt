@@ -16,17 +16,11 @@
 %% @end
 %%--------------------------------------------------------------------
 parse_transform(Ast,_Options)->
-    io:format("=======~n~p",[Ast]),
-    io:format("~n=pp======~n~s",[pretty_print(Ast)]),
     {ExtendedAst2, RogueDecorators} = lists:mapfoldl(fun transform_node/2, [], Ast),
 
     Ast3 = lists:flatten(lists:filter(fun(Node)-> Node =/= nil end, ExtendedAst2))
         ++ emit_errors_for_rogue_decorators(RogueDecorators),
 
-%%    Ast3 = [parse_form(F) || F <- Ast2],
-
-    io:format("~n<<<<~n~p",[Ast3]),
-    io:format("~n>>>>~n~s~n",[pretty_print(Ast3)]),
     Ast3.
 
 %%--------------------------------------------------------------------
@@ -38,11 +32,6 @@ pretty_print(Ast) -> lists:flatten([erl_pp:form(N) || N<-Ast]).
 
 emit_errors_for_rogue_decorators(DecoratorList)->
     [{error,{Line,erl_parse,["rogue decorator ", io_lib:format("~p",[D]) ]}} || {attribute, Line, decorate, D} <- DecoratorList].
-
-%%parse_form({function, _, FName, FArity, _} = T) ->
-%%    erl_syntax_lib:map(fun(TE) -> parse_macro(FName, FArity, TE) end, T);
-%%parse_form(T) ->
-%%    T.
 
 %% @doc Rewrites the placeholders ?FUNCTION and ?ARITY to the current
 %%      function name and arity.
@@ -56,8 +45,8 @@ parse_macro(FName, FArity, T) ->
         case erl_syntax:type(T) of
             atom ->
                 case erl_syntax:atom_value(T) of
-                    ?FUNCTION   -> erl_syntax:atom(FName);
-                    ?ARITY      -> erl_syntax:integer(FArity);
+                    '__FUNCTION__'   -> erl_syntax:atom(FName);
+                    '__ARITY__'      -> erl_syntax:integer(FArity);
                     _ -> T
                 end;
             _ ->
@@ -70,7 +59,7 @@ parse_macro(FName, FArity, T) ->
 % see http://www.erlang.org/doc/apps/erts/absform.html
 % outputs nil (to swallow the node), a single node, or a list of nodes.
 % nil nodes are removed in a subsequent pass and the lists flattened
-transform_node(Node={attribute, _Line, decorate, _Decorator}, DecoratorList) when is_tuple(_Decorator) andalso tuple_size(_Decorator) =:= 3 ->
+transform_node(Node={attribute, _Line, decorate, _Decorator}, DecoratorList) when is_tuple(_Decorator) ->
     % keep a list of decorators but dont emit them in the code.
     % this is important as you arent meant to have attributes after functions in a module
     {nil, [Node|DecoratorList]};
@@ -142,11 +131,11 @@ function_form_unpacker(Line,FuncName,Arity) ->
 function_forms_decorator_chain(Line, FuncName, Arity, DecoratorList) ->
     NumDecorators = length(DecoratorList),
     DecoratorIndexes = lists:zip(DecoratorList, lists:seq(1, NumDecorators)),
-    [ function_form_decorator_chain(Line,FuncName,Arity,D,I)
-        || { {attribute,_,decorate,D},I} <- DecoratorIndexes ] .
+    [ function_form_decorator_chain(Line,FuncName,Arity,DecoAttrs,Pos)
+        || { {attribute,_,decorate, DecoAttrs},Pos} <- DecoratorIndexes ] .
 
 
-function_form_decorator_chain(Line,FuncName,Arity, {DecMod, DecFun, DecExtraArgs}, DecoratorIndex) ->
+function_form_decorator_chain(Line,FuncName,Arity, DecoAttrs, DecoratorIndex) ->
     NextFuncName = generated_func_name({decorator_wrapper, FuncName, Arity, DecoratorIndex-1}),
     {function, Line,
         generated_func_name({decorator_wrapper, FuncName,Arity, DecoratorIndex}), % name
@@ -156,23 +145,27 @@ function_form_decorator_chain(Line,FuncName,Arity, {DecMod, DecFun, DecExtraArgs
             emit_guards(Line, []),
             [
                 % F = DecMod:DecFun( fun NextFun/1, ArgList),
-                emit_decorated_fun(Line, FuncName, Arity, 'F', {DecMod, DecFun, DecExtraArgs},   NextFuncName, 'ArgList'),
+                emit_decorated_fun(Line, FuncName, Arity, 'F', DecoAttrs,  NextFuncName, 'ArgList'),
                 % call 'F'
                 {call, Line,{var,Line,'F'},[]}
             ]
         }]
     }.
 
-emit_decorated_fun(Line, OriginalFunction, Arity, Name, {DecMod, DecFun, DecExtraArgs}, InnerFunName, ArgName)->
+emit_decorated_fun(Line, OriginalFunction, Arity, Name, {DecFun, DecExtraArgs}, InnerFunName, ArgName)->
     {match,Line,
         {var,Line,Name},
         {call,Line,
-            {remote, Line, {atom,Line,DecMod},{atom,Line,DecFun}},
+            {atom,Line,DecFun},
+%%            {remote, Line, {atom,Line,DecMod},{atom,Line,DecFun}},
             [
                 {'fun',Line,{function, InnerFunName, 1}},
                 {var, Line, ArgName},
-                erl_syntax_lib:map(fun(TE) -> parse_macro(OriginalFunction, Arity, TE) end, erl_syntax:abstract(DecExtraArgs))
-%%                erl_syntax:revert(erl_syntax:abstract(DecExtraArgs))    %convert to AST
+                {call,Line,
+                    {remote,Line,{atom,Line,ct_expand},{atom,Line,term}},
+                    [{call,Line,{atom,Line,preprocess_data},[
+                        erl_syntax_lib:map(fun(TE) -> parse_macro(OriginalFunction, Arity, TE) end, erl_syntax:abstract(DecExtraArgs))
+                    ]}]}
             ]
        }
     }.
