@@ -27,7 +27,7 @@ The most common way of using this application is:
    ```
    -compile([{parse_transform, decorator_pt_core}]).
 
-   -define(MY_DECORATOR(Options), -decorate({MyCbFun, {?MODULE, ?FUNCTION, Options}})).
+   -define(MY_DECORATOR(Options), -decorate({MyCbFun, {?MODULE, '__FUNCTION__', Options}})).
 
    ```
 3. Define the callback function in the callback module to your liking. Keep in mind what the
@@ -43,7 +43,6 @@ The most common way of using this application is:
 
    ```
    -include_lib("my_app/include/my_decorator.hrl").
-   -include_lib("decorator_pt/include/decorator_pt.hrl").
 
    [...]
 
@@ -55,10 +54,13 @@ The most common way of using this application is:
 
 ## ?funclog(":")
 1. include func_logger.hrl in your source file
+
    ```
    -include("func_logger.hrl").
    ```
+   
 2. put ?funclog(":") on the top of the function you need to inspect the arguments/return value.
+
    ```
    ?funclog(":").
    foo(Name, A, B, C, E, N) ->
