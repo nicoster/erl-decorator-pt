@@ -15,18 +15,41 @@
 
 %%-include("export.hrl").
 %%-include("func_logger.hrl").
+%%-compile({ct_expand_trace, [c]}).
 
--compile({parse_transform, dump_asm}).
+%%-compile({parse_transform, dump_ast}).
+-compile({parse_transform, ct_expand2}).
+%%-compile({parse_transform, cut}).
+-compile({parse_transform, dump_ast}).
 
 %%?export().
 %%?funclog(":2, 4:").
 %%?funclog("2:5").
-foo(Name, A, B, C, E, N) ->
-    case N > 0 of
-        true ->
-            foo(Name, A, B, C, E, N - 1);
-        _ -> ok
+%%foo(Name, A, B, C, E, N) ->
+%%    case N > 0 of
+%%        true ->
+%%            foo(Name, A, B, C, E, N - 1);
+%%        _ -> ok
+%%    end.
+
+get_props(Type) ->
+    case Type of
+        "a" -> 3;
+        "b" -> 5
     end.
 
+
+get_length(Type, U) ->
+    Typo = atom_to_list(Type),
+    case get_props(Typo) of
+        3 -> length(U) + 1;
+        5 -> size(list_to_binary(U))
+    end.
+
+%%foo() -> fun(Type) -> get_length(Type, "234") end (a).
+%%bar() -> get_length(a, _).
+
 %%?export().
-bar() -> ok.
+get_length_a(U) -> ct_expand2:term(get_length(a, U)). %% length(U) + 1
+
+%%get_length_b(U) -> ct_expand:term(get_length(b, "1234567")).
