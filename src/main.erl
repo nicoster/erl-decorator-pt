@@ -43,7 +43,9 @@ get_length(Type, U) ->
     Typo = atom_to_list(Type),
     case get_props(Typo) of
         3 -> length(U) + 1;
-        5 -> size(list_to_binary(U))
+        5 ->
+            Binary = list_to_binary(U),
+            size(Binary)
     end.
 
 %%foo() -> fun(Type) -> get_length(Type, "234") end (a).
@@ -52,4 +54,4 @@ get_length(Type, U) ->
 %%?export().
 get_length_a(U) -> ct_expand2:term(get_length(a, U)). %% length(U) + 1
 
-%%get_length_b(U) -> ct_expand:term(get_length(b, "1234567")).
+get_length_b(U) -> ct_expand2:term(get_length(b, U)).

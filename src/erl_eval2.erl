@@ -293,7 +293,6 @@ expr({'fun',Line,{clauses,Cs}} = Ex, Bs, Lf, Ef, RBs) ->
     %% Save only used variables in the function environment.
     %% {value,L,V} are hidden while lint finds used variables.
     {Ex1, _} = hide_calls(Ex, 0),
-    io:format("expr, fun, ~n    ~p ~n    hide:~n    ~p~n", [Ex, Ex1]),
     {ok,Used} = erl_lint:used_vars([Ex1], Bs),
     En = orddict:filter(fun(K,_V) -> member(K,Used) end, Bs),
     Info = {En,Lf,Ef,Cs},
@@ -418,7 +417,6 @@ expr({call,_,{remote,_,Mod,Func},As0}, Bs0, Lf, Ef, RBs) ->
             do_apply(M, F, As, Bs3, Ef, RBs)
     end;
 expr({call,_,{atom,_,Func},As0}, Bs0, Lf, Ef, RBs) ->
-    io:format("expr, call, atom, args:~p, func:~p, ~n", [As0, Func]),
     case erl_internal:bif(Func, length(As0)) of
         true ->
             {As,Bs} = expr_list(As0, Bs0, Lf, Ef),
@@ -427,7 +425,6 @@ expr({call,_,{atom,_,Func},As0}, Bs0, Lf, Ef, RBs) ->
             local_func(Func, As0, Bs0, Lf, Ef, RBs)
     end;
 expr({call,_,Func0,As0}, Bs0, Lf, Ef, RBs) -> % function or {Mod,Fun}
-    io:format("expr, call, args:~p,~n    func:~p, ~n", [As0, Func0]),
     {value,Func,Bs1} = expr(Func0, Bs0, Lf, Ef, none),
     {As,Bs2} = expr_list(As0, Bs1, Lf, Ef),
     case Func of
@@ -560,7 +557,6 @@ unhide_calls(E, _MaxLine, _D) ->
 
 ?funclog(":").
 local_func(Func, As0, Bs0, {value,F}, Ef, value) ->
-    io:format("local-func, args:~p,~n    func:~p~n", [As0, Func]),
     {As1,_Bs1} = expr_list(As0, Bs0, {value,F}, Ef),
     %% Make tail recursive calls when possible.
     F(Func, As1);
@@ -571,17 +567,14 @@ local_func(Func, As0, Bs0, {value,F,Eas}, Ef, RBs) ->
     Fun = fun(Name, Args) -> apply(F, [Name,Args|Eas]) end,
     local_func(Func, As0, Bs0, {value, Fun}, Ef, RBs);
 local_func(Func, As, Bs, {eval,F}, _Ef, RBs) ->
-    io:format("local-func, args:~p,~n    func:~p~n", [As, Func]),
     local_func2(F(Func, As, Bs), RBs);
 local_func(Func, As, Bs, {eval,F,Eas}, _Ef, RBs) ->
-    io:format("local-func, args:~p,~n    func:~p~n", [As, Func]),
     local_func2(apply(F, [Func,As,Bs|Eas]), RBs);
 %% These two clauses are for backwards compatibility.
 local_func(Func, As0, Bs0, {M,F}, Ef, RBs) ->
     {As1,Bs1} = expr_list(As0, Bs0, {M,F}, Ef),
     ret_expr(M:F(Func,As1), Bs1, RBs);
 local_func(Func, As, _Bs, {M,F,Eas}, _Ef, RBs) ->
-    io:format("local-func, args:~p,~n    func:~p~n", [As, Func]),
     local_func2(apply(M, F, [Func,As|Eas]), RBs);
 %% Default unknown function handler to undefined function.
 local_func(Func, As0, _Bs0, none, _Ef, _RBs) ->
@@ -818,7 +811,6 @@ ret_expr(V, _Bs, RBs) when is_list(RBs) ->
 
 eval_fun(As, {Bs0,Lf,Ef,Cs}) ->
     F = eval_fun(Cs, As, Bs0, Lf, Ef, value),
-    io:format("erl_eval2, eval_fun, ~p~n", [F]),
     F.
 
 eval_fun([{clause,_,H,G,B}|Cs], As, Bs0, Lf, Ef, RBs) ->

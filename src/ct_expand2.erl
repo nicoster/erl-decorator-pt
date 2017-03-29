@@ -59,6 +59,8 @@
 
 -spec parse_transform(forms(), options()) ->
     forms().
+
+
 parse_transform(Forms, Options) ->
     Trace = ct_trace_opt(Options, Forms),
     case parse_trans:depth_first(
@@ -97,8 +99,8 @@ xform_fun(application, Form, _Ctxt, Acc, Forms, Trace) ->
             RevArgs = parse_trans:revert(Args),
             case erl_eval2:exprs(RevArgs, [], {eval, LFH}) of
                 {value, {call, _, {'fun', _, _Cs}, _As} = Func, _} ->
-                    {ExprsV, Bs} = expand(Forms, Func, erl_eval2:new_bindings()),
-                    {hd(lists:last(ExprsV)), Acc};
+                    {_, Expr, Bs} = expand(Forms, Func, erl_eval2:new_bindings()),
+                    {Expr, Acc};
                 {value, Value, _} ->
                     {abstract(Value), Acc};
                 Other ->
@@ -121,53 +123,63 @@ expand(Forms, {'case', _, Cond, Cs} = CaseStatment, Bs) ->
             {value, Val, Bs2} = raw_expand(Forms, Cond, Bs),
             case erl_eval2:match_clause(Cs, [Val], Bs2, lfh(Forms, [])) of
                 {ClauseBody, Bs3} ->
-                    expands(Forms, ClauseBody, Bs3);
+                    {Result, Bs4} = expand_exprs(Forms, ClauseBody, Bs3),
+                    {ok, Result, Bs4};
                 notmatch ->
-                    {CaseStatment, Bs}
+                    {error, CaseStatment, Bs}
             end
         end
     catch
-        error:Err  ->
+        error:Err ->
             io:format("expand, exception, expr:~p, bs:~p, err:~p~n", [CaseStatment, Bs, Err]),
-            {CaseStatment, Bs}
+            {error, CaseStatment, Bs}
     end;
 
 expand(Forms, Expr, Bs_) ->
     try
         begin
-            {value, AV, Bs1_} = erl_eval2:expr(Expr, Bs_, lfh(Forms, [])),
-            {AV, Bs1_}
+            {value, AV, Bs1_} = raw_expand(Forms, Expr, Bs_),
+            {ok, AV, Bs1_}
         end
     catch
         error:Err ->
             io:format("expand, exception, expr:~p, bs:~p, err:~p~n", [Expr, Bs_, Err]),
-            {Expr, Bs_}
+            {error, Expr, Bs_}
     end.
 
-expands(Forms, Exprs, Bs) ->
-    lists:mapfoldl(
-        fun(Expr, Bs_) ->
-            {Result, Bs2} = expand(Forms, Expr, Bs_),
-            {Result, Bs2}
-        end, Bs, Exprs).
+?funclog("1:").
+expand_exprs(Forms, Exprs, Bs) ->
+    {NewExprs, {Bs3, Err}} = lists:mapfoldl(
+        fun(Expr, {Bs_, Error}) ->
+            case expand(Forms, Expr, Bs_) of
+                {ok, Result, Bs2} -> {{ok, Result}, {Bs2, Error}};
+                {error, Result, Bs2} -> {{error, Result}, {Bs2, true}}
+            end
+        end, {Bs, false}, Exprs),
+    if
+        Err -> {{block, 0, [
+            case State of
+                ok -> abstract(Result);
+                error -> Result
+            end || {State, Result} <- NewExprs]}, Bs3};
+        true -> {element(2, lists:last(NewExprs)), Bs3}
+    end.
 
 ?funclog("1:").
-%% this function is somewhat similar with erl_eval2:eval_fun/6.
-expand_lfun(Forms, [{clause,_,H,G, Exprs}|Cs], As0, Bs_in, Lf, Ef, RBs) ->
+expand_lfun(Forms, [{clause, _, H, G, Exprs} | Cs], As0, Bs_in, Lf, Ef, RBs) ->
     {As, Bs0} = lists:mapfoldl(
         fun(Expr, Bs_) ->
-            {Result, Bs2} = expand(Forms, Expr, Bs_),
+            {_, Result, Bs2} = expand(Forms, Expr, Bs_),
             {Result, Bs2}
         end, Bs_in, As0),
 
     case erl_eval2:match_list(H, As, erl_eval2:new_bindings()) of
-        {match,Bsn} ->
+        {match, Bsn} ->
             Bs1 = erl_eval2:add_bindings(Bsn, Bs0),
             case erl_eval2:guard(G, Bs1, Lf, Ef) of
                 true ->
-                    {ExprsV, Bs2} = expands(Forms, Exprs, Bs1),
-                    {ExprsV, Bs2};
-%%                    lists:last(ExprsV);
+                    {ExprsV, Bs2} = expand_exprs(Forms, Exprs, Bs1),
+                    {ok, ExprsV, Bs2};
                 false -> expand_lfun(Forms, Cs, As, Bs0, Lf, Ef, RBs)
             end;
         nomatch ->
@@ -175,7 +187,7 @@ expand_lfun(Forms, [{clause,_,H,G, Exprs}|Cs], As0, Bs_in, Lf, Ef, RBs) ->
     end;
 expand_lfun(_Forms, [], As, _Bs, _Lf, _Ef, _RBs) ->
     erlang:raise(error, function_clause,
-        [{?MODULE,'-inside-an-interpreted-fun-',As}, {erl_eval2,expr,3}]).
+        [{?MODULE, '-inside-an-interpreted-fun-', As}, {erl_eval2, expr, 3}]).
 
 extract_fun(Name, Arity, Forms) ->
     case [F_ || {function, _, N_, A_, _Cs} = F_ <- Forms,
@@ -208,7 +220,7 @@ eval_lfun({function, L, F, _, Clauses}, Args, Bs, Forms, Trace) ->
     try
         begin
             {value, Ret, _} =
-            erl_eval2:expr(Expr, Bs, lfh(Forms, Trace)),
+                erl_eval2:expr(Expr, Bs, lfh(Forms, Trace)),
             ret_trace(lists:member(r, Trace) orelse lists:member(x, Trace),
                 L, F, Args, Ret),
             %% restore bindings
@@ -216,7 +228,7 @@ eval_lfun({function, L, F, _, Clauses}, Args, Bs, Forms, Trace) ->
         end
     catch
         error:Err ->
-            io:format("eval-lfun exception, bs:~p err:~p~nexpr:~p~n", [ Bs, Err, Expr]),
+            io:format("eval-lfun exception, bs:~p err:~p~nexpr:~p~n", [Bs, Err, Expr]),
             exception_trace(lists:member(x, Trace), L, F, Args, Err),
             {value, Expr, Bs}
     end.
