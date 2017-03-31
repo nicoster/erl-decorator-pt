@@ -61,7 +61,8 @@
     forms().
 
 
-parse_transform(Forms, Options) ->
+parse_transform(Forms0, Options) ->
+    Forms = erl_expand_records:module(Forms0, []),
     Trace = ct_trace_opt(Options, Forms),
     case parse_trans:depth_first(
         fun(T, F, C, A) ->
@@ -97,7 +98,7 @@ xform_fun(application, Form, _Ctxt, Acc, Forms, Trace) ->
                   end,
             Args = erl_syntax:application_arguments(Form),
             RevArgs = parse_trans:revert(Args),
-            case erl_eval2:exprs(RevArgs, [], {eval, LFH}) of
+            case erl_eval2:exprs(RevArgs, [], {eval, LFH}, nlf()) of
                 {value, {call, _, {'fun', _, _Cs}, _As} = Func, _} ->
                     {_, Expr, Bs} = expand(Forms, Func, erl_eval2:new_bindings()),
                     {Expr, Acc};
@@ -112,7 +113,10 @@ xform_fun(application, Form, _Ctxt, Acc, Forms, Trace) ->
 xform_fun(_, Form, _Ctxt, Acc, _, _) ->
     {Form, Acc}.
 
-raw_expand(Forms, Expr, Bs) -> erl_eval2:expr(Expr, Bs, lfh(Forms, [])).
+remote_fun({M, F}, Args) -> apply(M, F, Args).
+nlf() -> {value, fun(A,B) -> remote_fun(A, B) end}.
+
+raw_expand(Forms, Expr, Bs) -> erl_eval2:expr(Expr, Bs, lfh(Forms, []), nlf()).
 
 ?funclog("1:").
 expand(Forms, {call, _, {'fun', _, {clauses, Cs}}, As}, Bs) ->
@@ -205,7 +209,7 @@ eval_lfun({function, L, F, _, Clauses}, Args, Bs, Forms, Trace) ->
             try
                 begin
                     {value, AV, Bs1_} =
-                        erl_eval2:expr(A, Bs_, lfh(Forms, Trace)),
+                        erl_eval2:expr(A, Bs_, lfh(Forms, Trace), nlf()),
                     {abstract(AV), Bs1_}
                 end
             catch
@@ -220,7 +224,7 @@ eval_lfun({function, L, F, _, Clauses}, Args, Bs, Forms, Trace) ->
     try
         begin
             {value, Ret, _} =
-                erl_eval2:expr(Expr, Bs, lfh(Forms, Trace)),
+                erl_eval2:expr(Expr, Bs, lfh(Forms, Trace), nlf()),
             ret_trace(lists:member(r, Trace) orelse lists:member(x, Trace),
                 L, F, Args, Ret),
             %% restore bindings
@@ -304,7 +308,7 @@ abstract([C | T]) when is_integer(C), 0 =< C, C < 256 ->
 abstract([H | T]) ->
     {cons, 0, abstract(H), abstract(T)};
 abstract(Tuple) when is_tuple(Tuple) ->
-    io:format("abstract, tuple:~p~n", [Tuple]),
+%%    io:format("abstract, tuple:~p~n", [Tuple]),
     {tuple, 0, abstract_list(tuple_to_list(Tuple))}.
 
 abstract_string([C | T], String) when is_integer(C), 0 =< C, C < 256 ->

@@ -43,7 +43,7 @@
 
 -export_type([binding_struct/0]).
 
--define(DEBUG, true).
+%%-define(DEBUG, true)
 -include("func_logger.hrl").
 
 -type(expression() :: erl_parse:abstract_expr()).
@@ -845,7 +845,7 @@ eval_named_fun([{clause,_,H,G,B}|Cs], As, Bs0, Lf, Ef, Name, Fun, RBs) ->
             eval_named_fun(Cs, As, Bs0, Lf, Ef, Name, Fun, RBs)
     end;
 eval_named_fun([], As, _Bs, _Lf, _Ef, _Name, _Fun, _RBs) ->
-    erlang:raise(error, function_clause,
+    erlang:raise(error, function_clause2,
                  [{?MODULE,'-inside-an-interpreted-fun-',As}|stacktrace()]).
 
 
